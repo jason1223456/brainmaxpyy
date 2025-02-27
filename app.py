@@ -1,23 +1,23 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import psycopg2
+import os
 import requests
 import json
 
 app = Flask(__name__)
 CORS(app)
 
-# 直接設定 PostgreSQL 連線資訊
+# PostgreSQL 資料庫連線設定
 DB_CONFIG = {
-    "dbname": "zeabur",  # 改成你的資料庫名稱
-    "user": "root",  # 改成你的資料庫用戶
-    "password": "MfaN1ck3P579izFWj4n8Ve6IS2d0ODwx",  # 改成你的密碼
-    "host": "sfo1.clusters.zeabur.com",  # 改成你的資料庫主機
-    "port": "31148"  # 改成你的資料庫端口
+    "dbname": "zeabur",
+    "user": "root",
+    "password": "MfaN1ck3P579izFWj4n8Ve6IS2d0ODwx",  # 修改為你的 PostgreSQL 密碼
+    "host": "sfo1.clusters.zeabur.com",
+    "port": "31148"
 }
 
 def get_db_connection():
-    """建立 PostgreSQL 連線"""
     return psycopg2.connect(**DB_CONFIG)
 
 # 呼叫 Claude API 生成新文案
@@ -26,7 +26,7 @@ def generate_new_copy_with_claude(user_prompt):
     url = "https://api.anthropic.com/v1/messages"
 
     headers = {
-        "x-api-key": "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",  # 直接寫入 API Key（不建議）
+        "x-api-key": "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",  # 替換為你的 Claude API Key
         "anthropic-version": "2023-06-01",
         "content-type": "application/json"
     }
@@ -116,6 +116,7 @@ def generate_copy():
 def save_generated_copy():
     data = request.get_json()
     full_name = data.get("full_name")
+    print(full_name)# 使用者名稱
     question = data.get("question")  # 使用者輸入的問題
     answer = data.get("answer")  # AI 生成的回應
 
@@ -129,7 +130,7 @@ def save_generated_copy():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # 插入資料到 test_results 資料表
+        # 插入資料到 saved_results 資料表
         insert_query = """
         INSERT INTO test_results (full_name, question, answer)
         VALUES (%s, %s, %s);
@@ -151,7 +152,6 @@ def save_generated_copy():
             "success": False,
             "message": f"伺服器錯誤: {str(e)}"
         })
-
 # 讀取 test_results 資料表
 @app.route('/get_test_results', methods=['GET'])
 def get_test_results():
@@ -179,6 +179,7 @@ def get_test_results():
             "success": False,
             "message": f"伺服器錯誤: {str(e)}"
         })
+
 
 if __name__ == '__main__':
     app.run(debug=True)
