@@ -12,25 +12,26 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-# PostgreSQL 資料庫連線設定，從環境變數讀取
+# **直接設定 PostgreSQL 連線資訊**
 DB_CONFIG = {
-    "dbname": os.getenv("DB_NAME"),
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD"),
-    "host": os.getenv("DB_HOST"),
-    "port": os.getenv("DB_PORT")
+    "dbname": "zeabur",  # 改成你的資料庫名稱
+    "user": "root",  # 改成你的資料庫用戶
+    "password": "MfaN1ck3P579izFWj4n8Ve6IS2d0ODwx",  # 改成你的密碼
+    "host": "sfo1.clusters.zeabur.com",  # 改成你的資料庫主機
+    "port": "31148"  # 改成你的資料庫端口
 }
 
 def get_db_connection():
+    """建立 PostgreSQL 連線"""
     return psycopg2.connect(**DB_CONFIG)
 
-# 呼叫 Claude API 生成新文案
+# **Claude API 仍然使用環境變數**
 def generate_new_copy_with_claude(user_prompt):
     """使用 Claude API 生成新的促銷文案"""
     url = "https://api.anthropic.com/v1/messages"
 
     headers = {
-        "x-api-key": os.getenv("CLAUDE_API_KEY"),  # 從環境變數讀取 API Key
+        "x-api-key": os.getenv("CLAUDE_API_KEY"),  # **API Key 從 .env 讀取**
         "anthropic-version": "2023-06-01",
         "content-type": "application/json"
     }
@@ -115,7 +116,7 @@ def generate_copy():
             "message": "生成文案時發生錯誤！"
         })
 
-# 新增保存文案的路由
+# **新增保存文案的路由**
 @app.route('/save_generated_copy', methods=['POST'])
 def save_generated_copy():
     data = request.get_json()
@@ -133,7 +134,7 @@ def save_generated_copy():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # 插入資料到 saved_results 資料表
+        # 插入資料到 test_results 資料表
         insert_query = """
         INSERT INTO test_results (full_name, question, answer)
         VALUES (%s, %s, %s);
@@ -156,7 +157,7 @@ def save_generated_copy():
             "message": f"伺服器錯誤: {str(e)}"
         })
 
-# 讀取 test_results 資料表
+# **讀取 test_results 資料表**
 @app.route('/get_test_results', methods=['GET'])
 def get_test_results():
     try:
@@ -183,7 +184,6 @@ def get_test_results():
             "success": False,
             "message": f"伺服器錯誤: {str(e)}"
         })
-
 
 if __name__ == '__main__':
     app.run(debug=True)
