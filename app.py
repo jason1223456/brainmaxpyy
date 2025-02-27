@@ -1,18 +1,13 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import psycopg2
-import os
 import requests
 import json
-from dotenv import load_dotenv
-
-# 載入 .env 檔案
-load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-# **直接設定 PostgreSQL 連線資訊**
+# 直接設定 PostgreSQL 連線資訊
 DB_CONFIG = {
     "dbname": "zeabur",  # 改成你的資料庫名稱
     "user": "root",  # 改成你的資料庫用戶
@@ -25,13 +20,13 @@ def get_db_connection():
     """建立 PostgreSQL 連線"""
     return psycopg2.connect(**DB_CONFIG)
 
-# **Claude API 仍然使用環境變數**
+# 呼叫 Claude API 生成新文案
 def generate_new_copy_with_claude(user_prompt):
     """使用 Claude API 生成新的促銷文案"""
     url = "https://api.anthropic.com/v1/messages"
 
     headers = {
-        "x-api-key": os.getenv("CLAUDE_API_KEY"),  # **API Key 從 .env 讀取**
+        "x-api-key": "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",  # 直接寫入 API Key（不建議）
         "anthropic-version": "2023-06-01",
         "content-type": "application/json"
     }
@@ -116,7 +111,7 @@ def generate_copy():
             "message": "生成文案時發生錯誤！"
         })
 
-# **新增保存文案的路由**
+# 新增保存文案的路由
 @app.route('/save_generated_copy', methods=['POST'])
 def save_generated_copy():
     data = request.get_json()
@@ -157,7 +152,7 @@ def save_generated_copy():
             "message": f"伺服器錯誤: {str(e)}"
         })
 
-# **讀取 test_results 資料表**
+# 讀取 test_results 資料表
 @app.route('/get_test_results', methods=['GET'])
 def get_test_results():
     try:
