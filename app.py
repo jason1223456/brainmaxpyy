@@ -26,7 +26,7 @@ def generate_new_copy_with_claude(user_prompt):
     url = "https://api.anthropic.com/v1/messages"
 
     headers = {
-        "x-api-key": "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",  # 替換為你的 Claude API Key
+        "x-api-key": "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",  # 替換為你的 Claude API Key
         "anthropic-version": "2023-06-01",
         "content-type": "application/json"
     }
