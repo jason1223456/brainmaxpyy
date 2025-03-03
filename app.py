@@ -20,7 +20,7 @@ def get_db_connection():
     return psycopg2.connect(**DB_CONFIG)
 
 # 🔹 Claude API Key
-CLAUDE_API_KEY = "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"
+CLAUDE_API_KEY = "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"
 
 # 🔹 在終端機輸出 API Key
 print("\n🔑 Claude API Key:", CLAUDE_API_KEY)
