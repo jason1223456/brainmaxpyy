@@ -3,6 +3,7 @@ from flask_cors import CORS
 import psycopg2
 import requests
 import json
+import base64
 
 app = Flask(__name__)
 CORS(app)
@@ -11,23 +12,24 @@ CORS(app)
 DB_CONFIG = {
     "dbname": "zeabur",
     "user": "root",
-    "password": "MfaN1ck3P579izFWj4n8Ve6IS2d0ODwx",  # 修改為你的 PostgreSQL 密碼
+    "password": "MfaN1ck3P579izFWj4n8Ve6IS2d0ODwx",  # ⚠️ 修改為你的 PostgreSQL 密碼
     "host": "sfo1.clusters.zeabur.com",
     "port": "31148"
 }
 
 def get_db_connection():
+    """ 建立 PostgreSQL 資料庫連線 """
     return psycopg2.connect(**DB_CONFIG)
 
-# 🔹 Claude API Key
-CLAUDE_API_KEY = "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"
+# 🔹 使用 Base64 編碼的 Claude API Key
+ENCODED_CLAUDE_API_KEY = "c2stYW50LWFwaTAzLTBUZ2JjTTVPQXJzcDlxbXVVOVk3aF8wdXVGakp4enlERXZGQk4wNjF0dlAwTDdVMnU4ei1lYWtNd2N3R3dkNGUtdVZRRkhSUmRtem9kcjBOVVB1T2dBLXk0TEhuZ0FB"
 
-# 🔹 在終端機輸出 API Key
-print("\n🔑 Claude API Key:", CLAUDE_API_KEY)
+# 🔹 解碼 API Key
+CLAUDE_API_KEY = base64.b64decode(ENCODED_CLAUDE_API_KEY).decode()
 
-# 🔹 呼叫 Claude API 生成新文案
+# 🔹 Claude API 請求函數
 def generate_new_copy_with_claude(user_prompt):
-    """使用 Claude API 生成新的促銷文案"""
+    """ 使用 Claude API 生成 AI 文案 """
     url = "https://api.anthropic.com/v1/messages"
 
     headers = {
@@ -37,7 +39,7 @@ def generate_new_copy_with_claude(user_prompt):
     }
 
     data = {
-        "model": "claude-3-5-sonnet-20241022",
+        "model": "claude-3-sonnet-20240229",
         "max_tokens": 700,
         "temperature": 0.5,
         "top_p": 0.7,
@@ -55,6 +57,7 @@ def generate_new_copy_with_claude(user_prompt):
         print(f"❌ Claude API 錯誤: {response.status_code}, {response.text}")
         return None
 
+# 🔹 登入 API
 @app.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -65,7 +68,8 @@ def login():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT account_level, full_name FROM users WHERE username = %s AND password_hash = %s", (username, password))
+        cursor.execute("SELECT account_level, full_name FROM users WHERE username = %s AND password_hash = %s", 
+                       (username, password))
         user = cursor.fetchone()
 
         cursor.close()
@@ -90,6 +94,7 @@ def login():
             "message": f"伺服器錯誤: {str(e)}"
         })
 
+# 🔹 生成 AI 文案
 @app.route('/generate_copy', methods=['POST'])
 def generate_copy():
     data = request.get_json()
@@ -116,13 +121,13 @@ def generate_copy():
             "message": "生成文案時發生錯誤！"
         })
 
-# 🔹 新增保存文案的路由
+# 🔹 儲存 AI 生成的文案
 @app.route('/save_generated_copy', methods=['POST'])
 def save_generated_copy():
     data = request.get_json()
-    full_name = data.get("full_name")  # 使用者名稱
-    question = data.get("question")  # 使用者輸入的問題
-    answer = data.get("answer")  # AI 生成的回應
+    full_name = data.get("full_name")  
+    question = data.get("question")  
+    answer = data.get("answer")  
 
     if not full_name or not question or not answer:
         return jsonify({
@@ -134,7 +139,6 @@ def save_generated_copy():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # 插入資料到 test_results 資料表
         insert_query = """
         INSERT INTO test_results (full_name, question, answer)
         VALUES (%s, %s, %s);
@@ -142,7 +146,6 @@ def save_generated_copy():
         cursor.execute(insert_query, (full_name, question, answer))
 
         conn.commit()
-
         cursor.close()
         conn.close()
 
@@ -164,14 +167,12 @@ def get_test_results():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # 查詢 test_results 資料表中的所有資料
         cursor.execute("SELECT id, full_name, question, answer FROM test_results")
         results = cursor.fetchall()
 
         cursor.close()
         conn.close()
 
-        # 格式化資料
         results_data = [{"id": row[0], "full_name": row[1], "question": row[2], "answer": row[3]} for row in results]
 
         return jsonify({
@@ -187,5 +188,5 @@ def get_test_results():
 
 if __name__ == '__main__':
     print("\n🚀 Flask 伺服器啟動中...")
-    print("🔑 Claude API Key:", CLAUDE_API_KEY)  # 在終端機輸出 API Key
-    app.run(debug=True)
+    print("🔐 Claude API Key (Base64 解碼後):", CLAUDE_API_KEY)  # ⚠️ 正式環境請移除，避免金鑰外洩！
+    app.run(debug=True, host="0.0.0.0", port=5000)
