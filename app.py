@@ -40,7 +40,7 @@ def generate_new_copy_with_claude(user_prompt):
 
     data = {
         "model": "claude-3-5-sonnet-20241022",
-        "max_tokens": 700,
+        "max_tokens": 2000,
         "temperature": 0.5,
         "top_p": 0.7,
         "system": "請以友善但專業的語氣回答問題，不要太熱情或冷淡。",
