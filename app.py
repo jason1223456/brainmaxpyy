@@ -21,40 +21,40 @@ def get_db_connection():
     """ 建立 PostgreSQL 資料庫連線 """
     return psycopg2.connect(**DB_CONFIG)
 
-# 🔹 使用 Base64 編碼的 Claude API Key
-ENCODED_CLAUDE_API_KEY = "c2stYW50LWFwaTAzLTBUZ2JjTTVPQXJzcDlxbXVVOVk3aF8wdXVGakp4enlERXZGQk4wNjF0dlAwTDdVMnU4ei1lYWtNd2N3R3dkNGUtdVZRRkhSUmRtem9kcjBOVVB1T2dBLXk0TEhuZ0FB"
+# 🔹 OpenRouter API Key (Base64 編碼)
+ENCODED_OPENROUTER_API_KEY = "c2stb3ItdjEtZjM2NmMwNGY4OGMxOTNlOTRjYTFiNzg0NWIxNjhlOTlkNzVmNjJhMTBkOTI5MjIyZGZhNTM0ZmIzMDg0YjA4Mg=="
+OPENROUTER_API_KEY = base64.b64decode(ENCODED_OPENROUTER_API_KEY).decode()
 
-# 🔹 解碼 API Key
-CLAUDE_API_KEY = base64.b64decode(ENCODED_CLAUDE_API_KEY).decode()
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# 🔹 Claude API 請求函數
-def generate_new_copy_with_claude(user_prompt):
-    """ 使用 Claude API 生成 AI 文案 """
-    url = "https://api.anthropic.com/v1/messages"
+# 🔹 可用模型列表
+AVAILABLE_MODELS = {
+    "1": "openai/gpt-4o",
+    "2": "anthropic/claude-3.7-sonnet:beta",
+    "3": "perplexity/sonar-deep-research",
+    "4": "google/gemini-flash-1.5",
+    "5": "deepseek/deepseek-r1:free"
+}
 
+def generate_copy_with_model(model, user_prompt):
+    """ 使用 OpenRouter API 透過指定模型生成文案 """
     headers = {
-        "x-api-key": CLAUDE_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json"
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json"
     }
-
+    
     data = {
-        "model": "claude-3-5-sonnet-20241022",
-        "max_tokens": 2000,
-        "temperature": 0.5,
-        "top_p": 0.7,
-        "system": "請以友善但專業的語氣回答問題，不要太熱情或冷淡。",
-        "messages": [
-            {"role": "user", "content": user_prompt}
-        ]
+        "model": model,
+        "messages": [{"role": "user", "content": user_prompt}]
     }
 
-    response = requests.post(url, headers=headers, data=json.dumps(data))
+    response = requests.post(OPENROUTER_API_URL, headers=headers, json=data)
 
     if response.status_code == 200:
-        return response.json().get("content", "⚠️ Claude 沒有返回內容")
+        result = response.json()
+        return result["choices"][0]["message"]["content"]
     else:
-        print(f"❌ Claude API 錯誤: {response.status_code}, {response.text}")
+        print(f"❌ {model} 錯誤: {response.status_code}, {response.text}")
         return None
 
 # 🔹 登入 API
@@ -68,7 +68,7 @@ def login():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT account_level, full_name FROM users WHERE username = %s AND password_hash = %s", 
+        cursor.execute("SELECT account_level, full_name FROM users WHERE username = %s AND password_hash = %s",
                        (username, password))
         user = cursor.fetchone()
 
@@ -99,35 +99,48 @@ def login():
 def generate_copy():
     data = request.get_json()
     user_prompt = data.get("prompt")
+    selected_model_keys = data.get("models")  # 前端傳來的選擇模型列表 (e.g., ["1", "3", "5"])
 
     if not user_prompt:
         return jsonify({
             "success": False,
-            "message": "請提供一個 prompt"
+            "message": "請提供 prompt"
         })
-
-    # 產生文案
-    new_copy = generate_new_copy_with_claude(user_prompt)
     
-    if new_copy:
-        return jsonify({
-            "success": True,
-            "message": "文案生成成功！",
-            "generated_copy": new_copy
-        })
-    else:
+    if not selected_model_keys:
         return jsonify({
             "success": False,
-            "message": "生成文案時發生錯誤！"
+            "message": "請選擇至少一個模型"
         })
+
+    # 取得選擇的模型列表
+    selected_models = [AVAILABLE_MODELS[key] for key in selected_model_keys if key in AVAILABLE_MODELS]
+
+    if not selected_models:
+        return jsonify({
+            "success": False,
+            "message": "選擇的模型無效"
+        })
+
+    # 依照選擇的模型逐一請求 OpenRouter API
+    generated_results = {}
+    for model in selected_models:
+        generated_text = generate_copy_with_model(model, user_prompt)
+        generated_results[model] = generated_text or "⚠️ 生成失敗"
+
+    return jsonify({
+        "success": True,
+        "message": "文案生成成功！",
+        "generated_results": generated_results
+    })
 
 # 🔹 儲存 AI 生成的文案
 @app.route('/save_generated_copy', methods=['POST'])
 def save_generated_copy():
     data = request.get_json()
-    full_name = data.get("full_name")  
-    question = data.get("question")  
-    answer = data.get("answer")  
+    full_name = data.get("full_name")
+    question = data.get("question")
+    answer = data.get("answer")
 
     if not full_name or not question or not answer:
         return jsonify({
@@ -188,5 +201,4 @@ def get_test_results():
 
 if __name__ == '__main__':
     print("\n🚀 Flask 伺服器啟動中...")
-    print("🔐 Claude API Key (Base64 解碼後):", CLAUDE_API_KEY)  # ⚠️ 正式環境請移除，避免金鑰外洩！
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True, host="0.0.0.0", port=5001)
