@@ -176,37 +176,29 @@ def save_generated_copy():
 # 🔹 讀取 test_results 資料表並執行模糊查詢
 @app.route('/get_test_results', methods=['GET'])
 def get_test_results():
-    search_query = request.args.get('search', '')  # 從前端獲取 'search' 參數（默認為空字串）
-
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-
-        # 使用模糊查詢 (LIKE) 去篩選資料
-        cursor.execute("""
-            SELECT id, full_name, question, answer
-            FROM test_results
-            WHERE full_name ILIKE %s OR question ILIKE %s OR answer ILIKE %s
-        """, (f'%{search_query}%', f'%{search_query}%', f'%{search_query}%'))
-
+        
+        # ✅ 加上 ORDER BY id DESC，確保最新筆資料排最前面
+        cursor.execute("SELECT id, full_name, question, answer FROM test_results ORDER BY id DESC")
         results = cursor.fetchall()
-
+        
         cursor.close()
         conn.close()
 
-        # 返回資料
         results_data = [{"id": row[0], "full_name": row[1], "question": row[2], "answer": row[3]} for row in results]
 
         return jsonify({
             "success": True,
             "data": results_data
         })
-
     except Exception as e:
         return jsonify({
             "success": False,
             "message": f"伺服器錯誤: {str(e)}"
         })
+
 
 if __name__ == '__main__':
     print("\n🚀 Flask 伺服器啟動中...")
