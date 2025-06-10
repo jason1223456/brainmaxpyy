@@ -4,9 +4,22 @@ import psycopg2
 import requests
 import json
 import base64
+import os
+from werkzeug.utils import secure_filename
+import mimetypes
 
 app = Flask(__name__)
 CORS(app)
+
+# 🔹 檔案上傳設定
+UPLOAD_FOLDER = './uploads'
+ALLOWED_EXTENSIONS = {'pdf', 'docx', 'txt'}
+ALLOWED_MIME_TYPES = {
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain'
+}
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # 🔹 PostgreSQL 資料庫連線設定
 DB_CONFIG = {
@@ -198,8 +211,74 @@ def get_test_results():
             "success": False,
             "message": f"伺服器錯誤: {str(e)}"
         })
+        
+def allowed_file(filename, mimetype):
+    ext = filename.rsplit('.', 1)[-1].lower()
+    return (
+        '.' in filename and
+        ext in ALLOWED_EXTENSIONS and
+        mimetype in ALLOWED_MIME_TYPES
+    )
+
+@app.route('/upload_file', methods=['POST'])
+def upload_file():
+    print("📩 收到上傳請求")
+    print("📦 Headers:", dict(request.headers))
+
+    if 'file' not in request.files:
+        return jsonify({"success": False, "message": "未提供檔案"}), 400
+
+    file = request.files['file']
+    uploader = request.form.get('uploader', 'anonymous')
+
+    if file.filename == '':
+        return jsonify({"success": False, "message": "檔案名稱為空"}), 400
+
+    original_filename = file.filename
+    print(f"📝 原始檔名: {original_filename}")
+
+    if '.' not in original_filename:
+        print(f"⚠️ 檔名沒有副檔名: {original_filename}")
+        return jsonify({"success": False, "message": "檔案缺少副檔名"}), 400
+
+    # 處理檔名（保留副檔名）
+    ext = original_filename.rsplit('.', 1)[1].lower()
+    base = secure_filename(original_filename.rsplit('.', 1)[0])
+    filename = f"{base}.{ext}"
+
+    mimetype = file.mimetype or mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+    print(f"📝 處理後檔名: {filename}")
+    print(f"🔍 MIME 類型: {mimetype}")
+
+    if not allowed_file(filename, mimetype):
+        return jsonify({"success": False, "message": f"不支援的檔案類型：{filename} / MIME：{mimetype}"}), 400
+
+    try:
+        file_data = file.read()
+        file_size = len(file_data)
+        save_path = os.path.join(UPLOAD_FOLDER, filename)
+
+        with open(save_path, 'wb') as f:
+            f.write(file_data)
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO uploaded_files (file_name, file_path, file_format, mime_type, file_size, uploader, file_data)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (filename, save_path, ext, mimetype, file_size, uploader, psycopg2.Binary(file_data)))
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({"success": True, "message": "檔案上傳成功"})
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"伺服器錯誤: {str(e)}"}), 500
+
 
 
 if __name__ == '__main__':
     print("\n🚀 Flask 伺服器啟動中...")
-    app.run(debug=True, host="0.0.0.0", port=5001)
+    app.run(debug=True, host="0.0.0.0", port=5003)
+
