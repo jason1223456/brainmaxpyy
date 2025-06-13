@@ -192,25 +192,37 @@ def get_test_results():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # ✅ 加上 ORDER BY id DESC，確保最新筆資料排最前面
-        cursor.execute("SELECT id, full_name, question, answer FROM test_results ORDER BY id DESC")
+
+        query = request.args.get('q', '').strip()
+
+        if query:
+            sql = """
+                SELECT id, full_name, question, answer
+                FROM test_results
+                WHERE full_name ILIKE %s OR question ILIKE %s OR answer ILIKE %s
+                ORDER BY id DESC
+            """
+            like_query = f"%{query}%"
+            cursor.execute(sql, (like_query, like_query, like_query))
+        else:
+            cursor.execute("""
+                SELECT id, full_name, question, answer
+                FROM test_results
+                ORDER BY id DESC
+            """)
+
         results = cursor.fetchall()
-        
         cursor.close()
         conn.close()
 
-        results_data = [{"id": row[0], "full_name": row[1], "question": row[2], "answer": row[3]} for row in results]
+        results_data = [
+            {"id": row[0], "full_name": row[1], "question": row[2], "answer": row[3]}
+            for row in results
+        ]
 
-        return jsonify({
-            "success": True,
-            "data": results_data
-        })
+        return jsonify({"success": True, "data": results_data})
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": f"伺服器錯誤: {str(e)}"
-        })
+        return jsonify({"success": False, "message": f"伺服器錯誤: {str(e)}"})
         
 def allowed_file(filename, mimetype):
     ext = filename.rsplit('.', 1)[-1].lower()
