@@ -35,7 +35,7 @@ def get_db_connection():
     return psycopg2.connect(**DB_CONFIG)
 
 # 🔹 OpenRouter API Key (Base64 編碼)
-ENCODED_OPENROUTER_API_KEY = "c2stb3ItdjEtZjM2NmMwNGY4OGMxOTNlOTRjYTFiNzg0NWIxNjhlOTlkNzVmNjJhMTBkOTI5MjIyZGZhNTM0ZmIzMDg0YjA4Mg=="
+ENCODED_OPENROUTER_API_KEY = "c2stb3ItdjEtNmUwZjk3YTc4NjM3YThmNzc3NTNhMzVmZTBhMDg5YWI5Mjc5M2FjYThlYmFhNTVhNjU0NjY3Zjk5YzBiZTgzYg=="
 OPENROUTER_API_KEY = base64.b64decode(ENCODED_OPENROUTER_API_KEY).decode()
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
