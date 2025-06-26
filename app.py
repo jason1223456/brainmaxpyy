@@ -7,6 +7,9 @@ import base64
 import os
 from werkzeug.utils import secure_filename
 import mimetypes
+import io
+from pdf2image import convert_from_path
+import pytesseract
 
 app = Flask(__name__)
 CORS(app)
@@ -126,7 +129,6 @@ def generate_copy():
             "message": "請選擇至少一個模型"
         })
 
-    # 取得選擇的模型列表
     selected_models = [AVAILABLE_MODELS[key] for key in selected_model_keys if key in AVAILABLE_MODELS]
 
     if not selected_models:
@@ -135,7 +137,6 @@ def generate_copy():
             "message": "選擇的模型無效"
         })
 
-    # 依照選擇的模型逐一請求 OpenRouter API
     generated_results = {}
     for model in selected_models:
         generated_text = generate_copy_with_model(model, user_prompt)
@@ -186,43 +187,30 @@ def save_generated_copy():
             "message": f"伺服器錯誤: {str(e)}"
         })
 
-# 🔹 讀取 test_results 資料表並執行模糊查詢
+# 🔹 讀取 test_results 資料表
 @app.route('/get_test_results', methods=['GET'])
 def get_test_results():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-
-        query = request.args.get('q', '').strip()
-
-        if query:
-            sql = """
-                SELECT id, full_name, question, answer
-                FROM test_results
-                WHERE full_name ILIKE %s OR question ILIKE %s OR answer ILIKE %s
-                ORDER BY id DESC
-            """
-            like_query = f"%{query}%"
-            cursor.execute(sql, (like_query, like_query, like_query))
-        else:
-            cursor.execute("""
-                SELECT id, full_name, question, answer
-                FROM test_results
-                ORDER BY id DESC
-            """)
-
+        
+        cursor.execute("SELECT id, full_name, question, answer FROM test_results ORDER BY id DESC")
         results = cursor.fetchall()
+        
         cursor.close()
         conn.close()
 
-        results_data = [
-            {"id": row[0], "full_name": row[1], "question": row[2], "answer": row[3]}
-            for row in results
-        ]
+        results_data = [{"id": row[0], "full_name": row[1], "question": row[2], "answer": row[3]} for row in results]
 
-        return jsonify({"success": True, "data": results_data})
+        return jsonify({
+            "success": True,
+            "data": results_data
+        })
     except Exception as e:
-        return jsonify({"success": False, "message": f"伺服器錯誤: {str(e)}"})
+        return jsonify({
+            "success": False,
+            "message": f"伺服器錯誤: {str(e)}"
+        })
         
 def allowed_file(filename, mimetype):
     ext = filename.rsplit('.', 1)[-1].lower()
@@ -232,11 +220,9 @@ def allowed_file(filename, mimetype):
         mimetype in ALLOWED_MIME_TYPES
     )
 
+# 🔹 檔案上傳 API
 @app.route('/upload_file', methods=['POST'])
 def upload_file():
-    print("📩 收到上傳請求")
-    print("📦 Headers:", dict(request.headers))
-
     if 'file' not in request.files:
         return jsonify({"success": False, "message": "未提供檔案"}), 400
 
@@ -247,20 +233,15 @@ def upload_file():
         return jsonify({"success": False, "message": "檔案名稱為空"}), 400
 
     original_filename = file.filename
-    print(f"📝 原始檔名: {original_filename}")
 
     if '.' not in original_filename:
-        print(f"⚠️ 檔名沒有副檔名: {original_filename}")
         return jsonify({"success": False, "message": "檔案缺少副檔名"}), 400
 
-    # 處理檔名（保留副檔名）
     ext = original_filename.rsplit('.', 1)[1].lower()
     base = secure_filename(original_filename.rsplit('.', 1)[0])
     filename = f"{base}.{ext}"
 
     mimetype = file.mimetype or mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-    print(f"📝 處理後檔名: {filename}")
-    print(f"🔍 MIME 類型: {mimetype}")
 
     if not allowed_file(filename, mimetype):
         return jsonify({"success": False, "message": f"不支援的檔案類型：{filename} / MIME：{mimetype}"}), 400
@@ -289,8 +270,98 @@ def upload_file():
         return jsonify({"success": False, "message": f"伺服器錯誤: {str(e)}"}), 500
 
 
+# 🔹 PDF OCR 掃描 API
+@app.route('/scan_pdf_ocr/<int:file_id>', methods=['GET'])
+def scan_pdf_ocr(file_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT file_data, file_format FROM uploaded_files WHERE id = %s", (file_id,))
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if not row:
+            return jsonify({"success": False, "message": "找不到該檔案"}), 404
+
+        file_data, file_format = row
+        if file_format != 'pdf':
+            return jsonify({"success": False, "message": "非 PDF 檔案，無法掃描"}), 400
+
+        # 寫暫存PDF檔案
+        temp_pdf_path = f"./temp_{file_id}.pdf"
+        with open(temp_pdf_path, 'wb') as f:
+            f.write(file_data)
+
+        # PDF轉圖片
+        pages = convert_from_path(temp_pdf_path)
+
+        full_text = ""
+        for page in pages:
+            text = pytesseract.image_to_string(page, lang='chi_tra+eng')
+            full_text += text + "\n\n"
+
+        # 刪除暫存檔
+        os.remove(temp_pdf_path)
+
+        return jsonify({"success": True, "content": full_text})
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"伺服器錯誤: {str(e)}"}), 500
+
+
+# 🔹 儲存掃描後編輯文字 API
+@app.route('/save_scanned_text', methods=['POST'])
+def save_scanned_text():
+    data = request.get_json()
+    file_id = data.get("file_id")
+    scanned_text = data.get("scanned_text")
+
+    if not file_id or scanned_text is None:
+        return jsonify({"success": False, "message": "缺少 file_id 或 scanned_text"}), 400
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE uploaded_files SET scanned_text = %s WHERE id = %s", (scanned_text, file_id))
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({"success": True, "message": "掃描文字已更新"})
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"伺服器錯誤: {str(e)}"}), 500
+@app.route('/list_uploaded_files', methods=['GET'])
+def list_uploaded_files():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        # 加入 scanned_text 欄位
+        cursor.execute("SELECT id, file_name, file_format, uploader, scanned_text FROM uploaded_files ORDER BY id DESC")
+        files = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        files_list = [
+            {
+                "id": row[0],
+                "file_name": row[1],
+                "file_format": row[2],
+                "uploader": row[3],
+                "scanned_text": row[4] if row[4] else ""  # 確保為字串
+            }
+            for row in files
+        ]
+
+        return jsonify({"success": True, "data": files_list})
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"伺服器錯誤: {str(e)}"})
+
+
 
 if __name__ == '__main__':
     print("\n🚀 Flask 伺服器啟動中...")
     app.run(debug=True, host="0.0.0.0", port=5003)
-
