@@ -193,10 +193,24 @@ def save_generated_copy():
 @app.route('/get_test_results', methods=['GET'])
 def get_test_results():
     try:
+        search_query = request.args.get('q', '').strip()
+
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("SELECT id, full_name, question, answer FROM test_results ORDER BY id DESC")
+        if search_query:
+            # 使用LIKE做模糊搜尋，這裡示範對 full_name、question、answer 三欄做搜尋
+            sql = """
+            SELECT id, full_name, question, answer
+            FROM test_results
+            WHERE full_name LIKE %s OR question LIKE %s OR answer LIKE %s
+            ORDER BY id DESC
+            """
+            like_query = f"%{search_query}%"
+            cursor.execute(sql, (like_query, like_query, like_query))
+        else:
+            cursor.execute("SELECT id, full_name, question, answer FROM test_results ORDER BY id DESC")
+
         results = cursor.fetchall()
         
         cursor.close()
@@ -213,14 +227,6 @@ def get_test_results():
             "success": False,
             "message": f"伺服器錯誤: {str(e)}"
         })
-        
-def allowed_file(filename, mimetype):
-    ext = filename.rsplit('.', 1)[-1].lower()
-    return (
-        '.' in filename and
-        ext in ALLOWED_EXTENSIONS and
-        mimetype in ALLOWED_MIME_TYPES
-    )
 
 # 🔹 檔案上傳 API
 @app.route('/upload_file', methods=['POST'])
