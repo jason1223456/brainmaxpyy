@@ -10,7 +10,9 @@ import mimetypes
 import io
 from pdf2image import convert_from_path
 import pytesseract
-
+import subprocess
+print("poppler path:", subprocess.getoutput("which pdftoppm"))
+print("poppler version:", subprocess.getoutput("pdftoppm -v"))
 app = Flask(__name__)
 CORS(app)
 
