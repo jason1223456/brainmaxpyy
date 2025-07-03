@@ -265,9 +265,10 @@ def upload_file():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO uploaded_files (file_name, file_path, file_format, mime_type, file_size, uploader, file_data)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (filename, save_path, ext, mimetype, file_size, uploader, psycopg2.Binary(file_data)))
+          INSERT INTO uploaded_files (file_name, file_path, file_format, mime_type, file_size, uploader, file_data, scanned_text, ai_generated_text)
+          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+         """, (filename, save_path, ext, mimetype, file_size, uploader, psycopg2.Binary(file_data), "", ""))
+
         conn.commit()
         cursor.close()
         conn.close()
@@ -347,7 +348,7 @@ def list_uploaded_files():
         conn = get_db_connection()
         cursor = conn.cursor()
         # 加入 scanned_text 欄位
-        cursor.execute("SELECT id, file_name, file_format, uploader, scanned_text FROM uploaded_files ORDER BY id DESC")
+        cursor.execute("SELECT id, file_name, file_format, uploader, scanned_text, ai_generated_text FROM uploaded_files ORDER BY id DESC")
         files = cursor.fetchall()
         cursor.close()
         conn.close()
@@ -358,7 +359,8 @@ def list_uploaded_files():
                 "file_name": row[1],
                 "file_format": row[2],
                 "uploader": row[3],
-                "scanned_text": row[4] if row[4] else ""  # 確保為字串
+                "scanned_text": row[4] if row[4] else "",
+                "ai_generated_text": row[5] if row[5] else ""
             }
             for row in files
         ]
@@ -369,6 +371,27 @@ def list_uploaded_files():
         return jsonify({"success": False, "message": f"伺服器錯誤: {str(e)}"})
 
 
+@app.route('/save_ai_text', methods=['POST'])
+def save_ai_text():
+    data = request.get_json()
+    file_id = data.get("file_id")
+    ai_generated_text = data.get("ai_generated_text")
+
+    if not file_id or ai_generated_text is None:
+        return jsonify({"success": False, "message": "缺少 file_id 或 ai_generated_text"}), 400
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE uploaded_files SET ai_generated_text = %s WHERE id = %s", (ai_generated_text, file_id))
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({"success": True, "message": "AI 文字已更新"})
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"伺服器錯誤: {str(e)}"}), 500
 
 if __name__ == '__main__':
     print("\n🚀 Flask 伺服器啟動中...")
