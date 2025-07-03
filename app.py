@@ -47,11 +47,11 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # 🔹 可用模型列表
 AVAILABLE_MODELS = {
-    "1": "openai/gpt-4o",
-    "2": "anthropic/claude-3.7-sonnet:beta",
-    "3": "perplexity/sonar-deep-research",
-    "4": "google/gemini-flash-1.5",
-    "5": "deepseek/deepseek-r1:free"
+    "1": "deepseek/deepseek-r1:free",
+    "2": "google/gemini-flash-2.5",
+    "3": "Claude4.0",
+    "4": "Claude3.7",
+    "5": "openai/gpt-4o"
 }
 
 def generate_copy_with_model(model, user_prompt):
@@ -371,7 +371,7 @@ def list_uploaded_files():
         return jsonify({"success": False, "message": f"伺服器錯誤: {str(e)}"})
 
 
-@app.route('/save_ai_text', methods=['POST'])
+@app.route('/save_ai_result', methods=['POST'])
 def save_ai_text():
     data = request.get_json()
     file_id = data.get("file_id")
