@@ -49,9 +49,10 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 AVAILABLE_MODELS = {
     "1": "deepseek/deepseek-r1:free",
     "2": "google/gemini-flash-2.5",
-    "3": "Claude4.0",
-    "4": "Claude3.7",
-    "5": "openai/gpt-4o"
+    "3": "anthropic/claude-sonnet-4",
+    "4": "anthropic/claude-sonnet-3.7",
+    "5": "openai/gpt-4o",
+    "6": "google/gemini-2.0-flash-exp:free"
 }
 
 def generate_copy_with_model(model, user_prompt):
