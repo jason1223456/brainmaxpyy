@@ -57,7 +57,7 @@ AVAILABLE_MODELS = {
 }
 
 def generate_copy_with_model(model, user_prompt):
-    """ 使用 OpenRouter API 透過指定模型生成文案 """
+    """ 使用 OpenRouter API 透過指定模型生成文案，並去除＊號 """
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json"
@@ -72,10 +72,14 @@ def generate_copy_with_model(model, user_prompt):
 
     if response.status_code == 200:
         result = response.json()
-        return result["choices"][0]["message"]["content"]
+        content = result["choices"][0]["message"]["content"]
+        # 移除＊號和*
+        clean_content = content.replace("＊", "").replace("*", "")
+        return clean_content
     else:
         print(f"❌ {model} 錯誤: {response.status_code}, {response.text}")
         return None
+
 
 # 🔹 登入 API
 @app.route('/login', methods=['POST'])
@@ -401,12 +405,20 @@ def generate_with_google_gemini(prompt: str) -> str | None:
         api_key = base64.b64decode(ENCODED_GOOGLE_API_KEY).decode()
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel(model_name="gemini-1.5-flash")
-        response = model.generate_content(prompt)
+        
+        prompt_with_language = prompt + "\n\n請用繁體中文回答，且回答中不要出現＊號或星號。"
+        
+        response = model.generate_content(prompt_with_language)
         text = response.candidates[0].content.parts[0].text
-        return text
+        
+        # 移除＊號和*
+        clean_text = text.replace("＊", "").replace("*", "")
+        
+        return clean_text
     except Exception as e:
         print(f"❌ Google Gemini 生成失敗: {e}")
         return None
+
 
 @app.route('/google_generate', methods=['POST'])
 def google_generate():
