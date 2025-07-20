@@ -11,15 +11,11 @@ import io
 from pdf2image import convert_from_path
 import pytesseract
 import subprocess
+import google.generativeai as genai
 print("poppler path:", subprocess.getoutput("which pdftoppm"))
 print("poppler version:", subprocess.getoutput("pdftoppm -v"))
 app = Flask(__name__)
 CORS(app)
-
-# 🔹 檔案上傳設定
-UPLOAD_FOLDER = './uploads'
-ALLOWED_EXTENSIONS = {'pdf', 'docx', 'txt'}
-ALLOWED_MIME_TYPES = {
     'application/pdf',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'text/plain'
@@ -40,7 +36,7 @@ def get_db_connection():
     return psycopg2.connect(**DB_CONFIG)
 
 # 🔹 OpenRouter API Key (Base64 編碼)
-ENCODED_OPENROUTER_API_KEY = "c2stb3ItdjEtNmUwZjk3YTc4NjM3YThmNzc3NTNhMzVmZTBhMDg5YWI5Mjc5M2FjYThlYmFhNTVhNjU0NjY3Zjk5YzBiZTgzYg=="
+ENCODED_OPENROUTER_API_KEY = "c2stb3ItdjEtMjA4M2VlZDllYWZiMjIyNTkxMzBjMjg4YjAyMGY1MDM2YTMwMzk2MGE2ZDUwYzg3MjdmOGVjNDVkMDc5MDNmZQ=="
 OPENROUTER_API_KEY = base64.b64decode(ENCODED_OPENROUTER_API_KEY).decode()
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -393,7 +389,34 @@ def save_ai_text():
 
     except Exception as e:
         return jsonify({"success": False, "message": f"伺服器錯誤: {str(e)}"}), 500
+def generate_with_google_gemini(prompt: str) -> str | None:
+    ENCODED_GOOGLE_API_KEY = "QUl6YVN5RE9XMnlRX0pUbENoejhTR012SHdReXlEeEM1RVNsQUpB"
 
+    try:
+        api_key = base64.b64decode(ENCODED_GOOGLE_API_KEY).decode()
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(model_name="gemini-1.5-flash")
+        response = model.generate_content(prompt)
+        text = response.candidates[0].content.parts[0].text
+        return text
+    except Exception as e:
+        print(f"❌ Google Gemini 生成失敗: {e}")
+        return None
+
+@app.route('/google_generate', methods=['POST'])
+def google_generate():
+    data = request.get_json()
+    prompt = data.get("prompt")
+
+    if not prompt:
+        return jsonify({"success": False, "message": "缺少 prompt"}), 400
+
+    result = generate_with_google_gemini(prompt)
+    if result:
+        return jsonify({"success": True, "result": result})
+    else:
+        return jsonify({"success": False, "message": "生成失敗"}), 500
 if __name__ == '__main__':
     print("\n🚀 Flask 伺服器啟動中...")
     app.run(debug=True, host="0.0.0.0", port=5003)
+
