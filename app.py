@@ -16,6 +16,11 @@ print("poppler path:", subprocess.getoutput("which pdftoppm"))
 print("poppler version:", subprocess.getoutput("pdftoppm -v"))
 app = Flask(__name__)
 CORS(app)
+
+# 🔹 檔案上傳設定
+UPLOAD_FOLDER = './uploads'
+ALLOWED_EXTENSIONS = {'pdf', 'docx', 'txt'}
+ALLOWED_MIME_TYPES = {
     'application/pdf',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'text/plain'
