@@ -250,7 +250,6 @@ def upload_file():
 
     if '.' not in original_filename:
         return jsonify({"success": False, "message": "檔案缺少副檔名"}), 400
-
     ext = original_filename.rsplit('.', 1)[1].lower()
     base = secure_filename(original_filename.rsplit('.', 1)[0])
     filename = f"{base}.{ext}"
@@ -283,6 +282,18 @@ def upload_file():
 
     except Exception as e:
         return jsonify({"success": False, "message": f"伺服器錯誤: {str(e)}"}), 500
+
+def allowed_file(filename, mimetype):
+    allowed_extensions = {'pdf', 'png', 'jpg', 'jpeg', 'txt'}
+    allowed_mimetypes = {
+        'application/pdf',
+        'image/png',
+        'image/jpeg',
+        'text/plain'
+    }
+
+    ext = filename.rsplit('.', 1)[1].lower()
+    return ext in allowed_extensions and mimetype in allowed_mimetypes
 
 
 # 🔹 PDF OCR 掃描 API
