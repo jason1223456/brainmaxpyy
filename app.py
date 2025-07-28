@@ -12,57 +12,58 @@ from pdf2image import convert_from_path
 import pytesseract
 import subprocess
 import google.generativeai as genai
-print("poppler path:", subprocess.getoutput("which pdftoppm"))
-print("poppler version:", subprocess.getoutput("pdftoppm -v"))
+
 app = Flask(__name__)
 CORS(app)
 
-# 🔹 檔案上傳設定
 UPLOAD_FOLDER = './uploads'
 ALLOWED_EXTENSIONS = {'pdf', 'docx', 'txt'}
-ALLOWED_MIME_TYPES = {
-    'application/pdf',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'text/plain'
-}
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# 🔹 PostgreSQL 資料庫連線設定
 DB_CONFIG = {
     "dbname": "zeabur",
     "user": "root",
-    "password": "MfaN1ck3P579izFWj4n8Ve6IS2d0ODwx",  # ⚠️ 修改為你的 PostgreSQL 密碼
+    "password": "MfaN1ck3P579izFWj4n8Ve6IS2d0ODwx",
     "host": "sfo1.clusters.zeabur.com",
     "port": "31148"
 }
 
 def get_db_connection():
-    """ 建立 PostgreSQL 資料庫連線 """
     return psycopg2.connect(**DB_CONFIG)
-
-# 🔹 OpenRouter API Key (Base64 編碼)
-ENCODED_OPENROUTER_API_KEY = "c2stb3ItdjEtMjA4M2VlZDllYWZiMjIyNTkxMzBjMjg4YjAyMGY1MDM2YTMwMzk2MGE2ZDUwYzg3MjdmOGVjNDVkMDc5MDNmZQ=="
-OPENROUTER_API_KEY = base64.b64decode(ENCODED_OPENROUTER_API_KEY).decode()
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# 🔹 可用模型列表
 AVAILABLE_MODELS = {
     "1": "deepseek/deepseek-r1:free",
     "2": "google/gemini-flash-2.5",
     "3": "anthropic/claude-sonnet-4",
-    "4": "anthropic/claude-sonnet-3.7",
-    "5": "openai/gpt-4o",
-    "6": "google/gemini-2.0-flash-exp:free"
+    "4": "openai/gpt-4o"
 }
 
-def generate_copy_with_model(model, user_prompt):
-    """ 使用 OpenRouter API 透過指定模型生成文案，並去除＊號 """
+# 🔹 從資料庫抓使用者 token 並解碼
+def get_openrouter_api_key(username):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT token FROM users WHERE username = %s", (username,))
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if row and row[0]:
+            return base64.b64decode(row[0]).decode()
+        return None
+    except Exception as e:
+        print(f"❌ 無法取得 Token: {e}")
+        return None
+
+# 🔹 呼叫 OpenRouter API
+def generate_copy_with_model(model, user_prompt, api_key):
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
-    
+
     data = {
         "model": model,
         "messages": [{"role": "user", "content": user_prompt}]
@@ -73,15 +74,11 @@ def generate_copy_with_model(model, user_prompt):
     if response.status_code == 200:
         result = response.json()
         content = result["choices"][0]["message"]["content"]
-        # 移除＊號和*
-        clean_content = content.replace("＊", "").replace("*", "")
-        return clean_content
+        return content.replace("＊", "").replace("*", "")
     else:
-        print(f"❌ {model} 錯誤: {response.status_code}, {response.text}")
+        print(f"❌ {model} 生成失敗: {response.status_code}, {response.text}")
         return None
 
-
-# 🔹 登入 API
 @app.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -95,7 +92,6 @@ def login():
         cursor.execute("SELECT account_level, full_name FROM users WHERE username = %s AND password_hash = %s",
                        (username, password))
         user = cursor.fetchone()
-
         cursor.close()
         conn.close()
 
@@ -118,42 +114,33 @@ def login():
             "message": f"伺服器錯誤: {str(e)}"
         })
 
-# 🔹 生成 AI 文案
 @app.route('/generate_copy', methods=['POST'])
 def generate_copy():
     data = request.get_json()
     user_prompt = data.get("prompt")
-    selected_model_keys = data.get("models")  # 前端傳來的選擇模型列表 (e.g., ["1", "3", "5"])
+    selected_model_keys = data.get("models")
+    username = data.get("username")
 
-    if not user_prompt:
-        return jsonify({
-            "success": False,
-            "message": "請提供 prompt"
-        })
-    
-    if not selected_model_keys:
-        return jsonify({
-            "success": False,
-            "message": "請選擇至少一個模型"
-        })
+    if not user_prompt or not selected_model_keys or not username:
+        return jsonify({"success": False, "message": "缺少必要參數"}), 400
+
+    api_key = get_openrouter_api_key(username)
+    if not api_key:
+        return jsonify({"success": False, "message": "無法取得 API Token"}), 500
 
     selected_models = [AVAILABLE_MODELS[key] for key in selected_model_keys if key in AVAILABLE_MODELS]
-
     if not selected_models:
-        return jsonify({
-            "success": False,
-            "message": "選擇的模型無效"
-        })
+        return jsonify({"success": False, "message": "選擇的模型無效"})
 
-    generated_results = {}
+    results = {}
     for model in selected_models:
-        generated_text = generate_copy_with_model(model, user_prompt)
-        generated_results[model] = generated_text or "⚠️ 生成失敗"
+        text = generate_copy_with_model(model, user_prompt, api_key)
+        results[model] = text or "⚠️ 生成失敗"
 
     return jsonify({
         "success": True,
         "message": "文案生成成功！",
-        "generated_results": generated_results
+        "generated_results": results
     })
 
 # 🔹 儲存 AI 生成的文案
