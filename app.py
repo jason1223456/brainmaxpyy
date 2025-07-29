@@ -187,29 +187,33 @@ def save_generated_copy():
 @app.route('/get_test_results', methods=['GET'])
 def get_test_results():
     try:
-        username = request.args.get('username', '').strip()  # 取得 username 查詢條件
-        
+        username = request.args.get('username', '').strip()
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        if username:
-            # 只查該使用者的資料
-            sql = """
+
+        if username and username != 'admin':  # 不是 admin 的話就只撈自己的資料
+            cursor.execute("""
                 SELECT id, full_name, question, answer
                 FROM test_results
                 WHERE full_name = %s
                 ORDER BY id DESC
-            """
-            cursor.execute(sql, (username,))
+            """, (username,))
         else:
-            # 沒帶 username，回傳全部資料（管理者用）
-            cursor.execute("SELECT id, full_name, question, answer FROM test_results ORDER BY id DESC")
+            # admin 可看到全部資料
+            cursor.execute("""
+                SELECT id, full_name, question, answer
+                FROM test_results
+                ORDER BY id DESC
+            """)
 
         results = cursor.fetchall()
         cursor.close()
         conn.close()
 
-        results_data = [{"id": row[0], "full_name": row[1], "question": row[2], "answer": row[3]} for row in results]
+        results_data = [
+            {"id": row[0], "full_name": row[1], "question": row[2], "answer": row[3]}
+            for row in results
+        ]
 
         return jsonify({
             "success": True,
@@ -219,7 +223,8 @@ def get_test_results():
         return jsonify({
             "success": False,
             "message": f"伺服器錯誤: {str(e)}"
-        })
+        }), 500
+
 
 
 # 🔹 檔案上傳 API
