@@ -100,7 +100,8 @@ def login():
                 "success": True,
                 "message": "登入成功！",
                 "account_level": user[0],
-                "full_name": user[1]
+                "full_name": user[1],
+                "token":user[2]
             })
         else:
             return jsonify({
