@@ -89,7 +89,7 @@ def login():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT account_level, full_name FROM users WHERE username = %s AND password_hash = %s",
+        cursor.execute("SELECT account_level, full_name,token FROM users WHERE username = %s AND password_hash = %s",
                        (username, password))
         user = cursor.fetchone()
         cursor.close()
