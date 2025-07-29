@@ -184,43 +184,68 @@ def save_generated_copy():
         })
 
 # 🔹 讀取 test_results 資料表
-@app.route('/get_test_results', methods=['GET'])
+@app.route('/get_test_results', methods=['POST'])
 def get_test_results():
     try:
-        search_query = request.args.get('q', '').strip()
+        data = request.get_json()
+        username = data.get("username", "").strip()
+        search_query = data.get("q", "").strip()  # 可以傳搜尋條件
+
+        if not username:
+            return jsonify({"success": False, "message": "請提供用戶名稱"}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        if search_query:
-            # 使用LIKE做模糊搜尋，這裡示範對 full_name、question、answer 三欄做搜尋
-            sql = """
-            SELECT id, full_name, question, answer
-            FROM test_results
-            WHERE full_name LIKE %s OR question LIKE %s OR answer LIKE %s
-            ORDER BY id DESC
+
+        # 查詢用戶身分
+        cursor.execute("SELECT is_admin FROM users WHERE username=%s", (username,))
+        user_row = cursor.fetchone()
+        if not user_row:
+            cursor.close()
+            conn.close()
+            return jsonify({"success": False, "message": "用戶不存在"}), 404
+
+        is_admin = user_row[0]
+
+        # 依身份決定查詢語句
+        if is_admin:
+            # 管理者可以看全部
+            base_sql = """
+                SELECT id, full_name, question, answer FROM test_results
             """
-            like_query = f"%{search_query}%"
-            cursor.execute(sql, (like_query, like_query, like_query))
+            params = []
+            if search_query:
+                base_sql += " WHERE full_name LIKE %s OR question LIKE %s OR answer LIKE %s"
+                like_query = f"%{search_query}%"
+                params.extend([like_query, like_query, like_query])
+            base_sql += " ORDER BY id DESC"
+            cursor.execute(base_sql, tuple(params))
+
         else:
-            cursor.execute("SELECT id, full_name, question, answer FROM test_results ORDER BY id DESC")
+            # 一般用戶只能看自己的資料
+            base_sql = """
+                SELECT id, full_name, question, answer FROM test_results
+                WHERE full_name = %s
+            """
+            params = [username]
+            if search_query:
+                base_sql += " AND (full_name LIKE %s OR question LIKE %s OR answer LIKE %s)"
+                like_query = f"%{search_query}%"
+                params.extend([like_query, like_query, like_query])
+            base_sql += " ORDER BY id DESC"
+            cursor.execute(base_sql, tuple(params))
 
         results = cursor.fetchall()
-        
+
         cursor.close()
         conn.close()
 
         results_data = [{"id": row[0], "full_name": row[1], "question": row[2], "answer": row[3]} for row in results]
 
-        return jsonify({
-            "success": True,
-            "data": results_data
-        })
+        return jsonify({"success": True, "data": results_data})
+
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": f"伺服器錯誤: {str(e)}"
-        })
+        return jsonify({"success": False, "message": f"伺服器錯誤: {str(e)}"}), 500
 
 # 🔹 檔案上傳 API
 @app.route('/upload_file', methods=['POST'])
