@@ -188,25 +188,23 @@ def save_generated_copy():
 def get_test_results():
     try:
         username = request.args.get('username', '').strip()
+
+        if not username:
+            return jsonify({"success": False, "message": "缺少 username 參數"}), 400
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        if username and username != 'admin':  # 不是 admin 的話就只撈自己的資料
-            cursor.execute("""
-                SELECT id, full_name, question, answer
-                FROM test_results
-                WHERE full_name = %s
-                ORDER BY id DESC
-            """, (username,))
-        else:
-            # admin 可看到全部資料
-            cursor.execute("""
-                SELECT id, full_name, question, answer
-                FROM test_results
-                ORDER BY id DESC
-            """)
-
+        # 查詢只屬於該使用者的資料
+        sql = """
+            SELECT id, full_name, question, answer
+            FROM test_results
+            WHERE full_name = %s
+            ORDER BY id DESC
+        """
+        cursor.execute(sql, (username,))
         results = cursor.fetchall()
+
         cursor.close()
         conn.close()
 
@@ -215,10 +213,7 @@ def get_test_results():
             for row in results
         ]
 
-        return jsonify({
-            "success": True,
-            "data": results_data
-        })
+        return jsonify({"success": True, "data": results_data})
     except Exception as e:
         return jsonify({
             "success": False,
@@ -227,28 +222,29 @@ def get_test_results():
 
 
 
-# 🔹 檔案上傳 API
+# 🔹 檔案上傳 API（不用 token，直接接收前端傳來的使用者名稱）
 @app.route('/upload_file', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
         return jsonify({"success": False, "message": "未提供檔案"}), 400
 
     file = request.files['file']
+    
+    # 從表單取得上傳者名稱（前端傳過來）
     uploader = request.form.get('uploader', 'anonymous')
 
     if file.filename == '':
         return jsonify({"success": False, "message": "檔案名稱為空"}), 400
 
     original_filename = file.filename
-
     if '.' not in original_filename:
         return jsonify({"success": False, "message": "檔案缺少副檔名"}), 400
+
     ext = original_filename.rsplit('.', 1)[1].lower()
     base = secure_filename(original_filename.rsplit('.', 1)[0])
     filename = f"{base}.{ext}"
 
     mimetype = file.mimetype or mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-
     if not allowed_file(filename, mimetype):
         return jsonify({"success": False, "message": f"不支援的檔案類型：{filename} / MIME：{mimetype}"}), 400
 
@@ -260,21 +256,24 @@ def upload_file():
         with open(save_path, 'wb') as f:
             f.write(file_data)
 
+        # 寫入資料庫，記錄 uploader
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-          INSERT INTO uploaded_files (file_name, file_path, file_format, mime_type, file_size, uploader, file_data, scanned_text, ai_generated_text)
-          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-         """, (filename, save_path, ext, mimetype, file_size, uploader, psycopg2.Binary(file_data), "", ""))
+            INSERT INTO uploaded_files (
+                file_name, file_path, file_format, mime_type, file_size, uploader, file_data, scanned_text, ai_generated_text
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (filename, save_path, ext, mimetype, file_size, uploader, psycopg2.Binary(file_data), "", ""))
 
         conn.commit()
         cursor.close()
         conn.close()
 
-        return jsonify({"success": True, "message": "檔案上傳成功"})
+        return jsonify({"success": True, "message": f"檔案上傳成功，由 {uploader} 上傳"})
 
     except Exception as e:
         return jsonify({"success": False, "message": f"伺服器錯誤: {str(e)}"}), 500
+
 
 def allowed_file(filename, mimetype):
     allowed_extensions = {'pdf', 'png', 'jpg', 'jpeg', 'txt'}
@@ -284,9 +283,9 @@ def allowed_file(filename, mimetype):
         'image/jpeg',
         'text/plain'
     }
-
     ext = filename.rsplit('.', 1)[1].lower()
     return ext in allowed_extensions and mimetype in allowed_mimetypes
+
 
 
 # 🔹 PDF OCR 掃描 API
@@ -355,10 +354,26 @@ def save_scanned_text():
 @app.route('/list_uploaded_files', methods=['GET'])
 def list_uploaded_files():
     try:
+        uploader = request.args.get('uploader')  # 取得前端傳來的使用者名稱
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        # 加入 scanned_text 欄位
-        cursor.execute("SELECT id, file_name, file_format, uploader, scanned_text, ai_generated_text FROM uploaded_files ORDER BY id DESC")
+
+        if uploader:
+            cursor.execute("""
+                SELECT id, file_name, file_format, uploader, scanned_text, ai_generated_text
+                FROM uploaded_files
+                WHERE uploader = %s
+                ORDER BY id DESC
+            """, (uploader,))
+        else:
+            # 如果沒傳 uploader，預設查全部（或可以改成回傳錯誤）
+            cursor.execute("""
+                SELECT id, file_name, file_format, uploader, scanned_text, ai_generated_text
+                FROM uploaded_files
+                ORDER BY id DESC
+            """)
+
         files = cursor.fetchall()
         cursor.close()
         conn.close()
@@ -379,6 +394,7 @@ def list_uploaded_files():
 
     except Exception as e:
         return jsonify({"success": False, "message": f"伺服器錯誤: {str(e)}"})
+
 
 
 @app.route('/save_ai_result', methods=['POST'])
