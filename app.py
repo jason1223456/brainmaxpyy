@@ -454,7 +454,5 @@ def google_generate():
         return jsonify({"success": True, "result": result})
     else:
         return jsonify({"success": False, "message": "生成失敗"}), 500
-if __name__ == '__main__':
-    print("\n🚀 Flask 伺服器啟動中...")
-    app.run(debug=True, host="0.0.0.0", port=5003)
+
 
