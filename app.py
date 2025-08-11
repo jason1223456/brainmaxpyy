@@ -313,7 +313,8 @@ def scan_pdf_ocr(file_id):
             f.write(file_data)
 
         # PDF轉圖片
-        pages = convert_from_path(temp_pdf_path)
+        pages = convert_from_path(temp_pdf_path, dpi=200)
+
 
         full_text = ""
         for page in pages:
