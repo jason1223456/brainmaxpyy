@@ -187,6 +187,8 @@ def save_generated_copy():
 def get_test_results():
     try:
         username = request.args.get('username', '').strip()
+        search_query = request.args.get('q', '').strip()  # 取得搜尋參數
+
         if not username:
             return jsonify({"success": False, "message": "缺少 username 參數"}), 400
 
@@ -194,25 +196,27 @@ def get_test_results():
         cursor = conn.cursor()
 
         if username.lower() == "root":
-            # root 回傳所有資料
-            sql = """
-                SELECT id, full_name, question, answer
-                FROM test_results
-                ORDER BY id DESC
-            """
-            cursor.execute(sql)
+            # root 回傳所有資料，可搜尋
+            sql = "SELECT id, full_name, question, answer FROM test_results"
+            params = []
+            if search_query:
+                sql += " WHERE question LIKE %s OR answer LIKE %s"
+                search_like = f"%{search_query}%"
+                params.extend([search_like, search_like])
+            sql += " ORDER BY id DESC"
+            cursor.execute(sql, params)
         else:
-            # 其他帳號只回傳自己的資料
-            sql = """
-                SELECT id, full_name, question, answer
-                FROM test_results
-                WHERE full_name = %s
-                ORDER BY id DESC
-            """
-            cursor.execute(sql, (username,))
+            # 其他帳號只回傳自己的資料，可搜尋
+            sql = "SELECT id, full_name, question, answer FROM test_results WHERE full_name = %s"
+            params = [username]
+            if search_query:
+                sql += " AND (question LIKE %s OR answer LIKE %s)"
+                search_like = f"%{search_query}%"
+                params.extend([search_like, search_like])
+            sql += " ORDER BY id DESC"
+            cursor.execute(sql, params)
 
         results = cursor.fetchall()
-
         cursor.close()
         conn.close()
 
@@ -228,6 +232,7 @@ def get_test_results():
             "success": False,
             "message": f"伺服器錯誤: {str(e)}"
         }), 500
+
 
 # 🔹 檔案上傳 API（不用 token，直接接收前端傳來的使用者名稱）
 @app.route('/upload_file', methods=['POST'])
