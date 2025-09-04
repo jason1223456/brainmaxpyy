@@ -183,26 +183,34 @@ def save_generated_copy():
             "message": f"伺服器錯誤: {str(e)}"
         })
 
-# 🔹 讀取 test_results 資料表
 @app.route('/get_test_results', methods=['GET'])
 def get_test_results():
     try:
         username = request.args.get('username', '').strip()
-
         if not username:
             return jsonify({"success": False, "message": "缺少 username 參數"}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # 查詢只屬於該使用者的資料
-        sql = """
-            SELECT id, full_name, question, answer
-            FROM test_results
-            WHERE full_name = %s
-            ORDER BY id DESC
-        """
-        cursor.execute(sql, (username,))
+        if username.lower() == "root":
+            # root 回傳所有資料
+            sql = """
+                SELECT id, full_name, question, answer
+                FROM test_results
+                ORDER BY id DESC
+            """
+            cursor.execute(sql)
+        else:
+            # 其他帳號只回傳自己的資料
+            sql = """
+                SELECT id, full_name, question, answer
+                FROM test_results
+                WHERE full_name = %s
+                ORDER BY id DESC
+            """
+            cursor.execute(sql, (username,))
+
         results = cursor.fetchall()
 
         cursor.close()
@@ -214,13 +222,12 @@ def get_test_results():
         ]
 
         return jsonify({"success": True, "data": results_data})
+
     except Exception as e:
         return jsonify({
             "success": False,
             "message": f"伺服器錯誤: {str(e)}"
         }), 500
-
-
 
 # 🔹 檔案上傳 API（不用 token，直接接收前端傳來的使用者名稱）
 @app.route('/upload_file', methods=['POST'])
@@ -313,8 +320,7 @@ def scan_pdf_ocr(file_id):
             f.write(file_data)
 
         # PDF轉圖片
-        pages = convert_from_path(temp_pdf_path, dpi=200)
-
+        pages = convert_from_path(temp_pdf_path)
 
         full_text = ""
         for page in pages:
