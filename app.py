@@ -35,7 +35,7 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 AVAILABLE_MODELS = {
     "1": "deepseek/deepseek-r1:free",
-    "2": "google/gemini-flash-2.0",
+    "2": "google/gemini-flash-1.5",
     "3": "anthropic/claude-sonnet-4",
     "4": "openai/gpt-4o",
     "5": "openai/gpt-5"
