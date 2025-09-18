@@ -37,7 +37,7 @@ AVAILABLE_MODELS = {
     "1": "deepseek/deepseek-r1:free",
     "2": "google/gemini-flash-2.5",
     "3": "anthropic/claude-sonnet-4",
-    "4": "openai/gpt-4o"
+    "4": "openai/gpt-5"
 }
 
 # 🔹 從資料庫抓使用者 token 並解碼
