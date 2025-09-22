@@ -17,5 +17,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 EXPOSE 8080
 
 # 啟動 Flask 應用（注意你是 5003，但 Zeabur 預設走 8080，我們要轉一下）
-CMD ["gunicorn", "-b", "0.0.0.0:8080", "--timeout", "120", "app:app"]
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "--timeout", "240", "app:app"]
 
