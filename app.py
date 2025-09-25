@@ -196,7 +196,7 @@ def get_test_results():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        if username.lower() == "root":
+        if username.lower() == "admin":
             # root 回傳所有資料，可搜尋
             sql = "SELECT id, full_name, question, answer FROM test_results"
             params = []
